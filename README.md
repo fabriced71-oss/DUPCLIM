@@ -799,7 +799,7 @@ function downloadBackup(db) {
 
 /* ================================ Helpers =============================== */
 const uid = (p = "id") => `${p}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-const APP_VERSION = "4.2";
+const APP_VERSION = "4.4";
 const todayISO = () => new Date().toISOString().slice(0, 10);
 function fmtDate(iso) {
   if (!iso) return "—";
@@ -3530,7 +3530,7 @@ function GazView({
     className: "text-2xl md:text-3xl font-extrabold mb-1"
   }, "Fluides frigorigènes"), /*#__PURE__*/React.createElement("p", {
     className: "text-sm text-slate-500 mb-5"
-  }, "Stock des bouteilles et suivi de charge. Saisis le stock acheté (kg) ; le fluide chargé lors des interventions est décompté automatiquement pour donner le stock restant."), /*#__PURE__*/React.createElement("div", {
+  }, "Stock des bouteilles et suivi de charge. Saisis le stock acheté (kg) ; le fluide chargé lors des interventions est décompté automatiquement pour donner le stock restant."), /*#__PURE__*/React.createElement(CalcCO2, null), /*#__PURE__*/React.createElement("div", {
     className: "bg-white rounded-2xl border border-slate-200 p-4 mb-4"
   }, /*#__PURE__*/React.createElement("div", {
     className: "font-semibold text-sm mb-1"
@@ -5617,356 +5617,74 @@ const TYPES_ENTRETIEN = {
   "Unité extérieure": ["Nettoyage du condenseur / échangeur extérieur", "Contrôle du ventilateur et du compresseur", "Vérification des raccordements, fixations et supports", "Contrôle des pressions et de l'étanchéité", "Vérification de l'environnement (écoulements, dégagements)"]
 };
 async function buildContratPdf(c, site, eqs, logo) {
-  const {
-    PDFDocument,
-    StandardFonts,
-    rgb
-  } = PDFLib;
+  const { PDFDocument, StandardFonts, rgb } = PDFLib;
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const W = 595.28,
-    Hh = 841.89,
-    M = 48,
-    maxW = W - M * 2;
-  const slate = rgb(0.118, 0.161, 0.231),
-    grey = rgb(0.42, 0.45, 0.5),
-    light = rgb(0.85, 0.88, 0.91),
-    sky = rgb(0.02, 0.52, 0.78),
-    cardbg = rgb(0.96, 0.97, 0.98),
-    dark = rgb(0.1, 0.12, 0.16);
+  const W = 595.28, Hh = 841.89, M = 38, maxW = W - M * 2;
+  const slate = rgb(0.118, 0.161, 0.231), grey = rgb(0.42, 0.45, 0.5), light = rgb(0.85, 0.88, 0.91), sky = rgb(0.02, 0.52, 0.78), cardbg = rgb(0.96, 0.97, 0.98), dark = rgb(0.1, 0.12, 0.16);
   const san = s => String(s == null ? "" : s).replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/\u2013|\u2014/g, "-").replace(/\u00a0/g, " ").replace(/\u2022/g, "-");
   const fmt = iso => iso ? new Date(iso + "T00:00:00").toLocaleDateString("fr-FR") : "-";
-  let logoImg = null,
-    lw = 0,
-    lh = 0;
-  if (logo) {
-    try {
-      const b = dataUrlToBytes(logo);
-      logoImg = logo.indexOf("image/png") >= 0 ? await doc.embedPng(b) : await doc.embedJpg(b);
-      const s = Math.min(50 / logoImg.height, 160 / logoImg.width, 1);
-      lw = logoImg.width * s;
-      lh = logoImg.height * s;
-    } catch (e) {
-      logoImg = null;
-    }
-  }
-  let page, y;
-  const wrap = (t, f, size) => {
-    const words = san(t).split(/\s+/);
-    const lines = [];
-    let cur = "";
-    for (const w of words) {
-      const tt = cur ? cur + " " + w : w;
-      if (f.widthOfTextAtSize(tt, size) > maxW && cur) {
-        lines.push(cur);
-        cur = w;
-      } else cur = tt;
-    }
-    if (cur) lines.push(cur);
-    return lines.length ? lines : [""];
-  };
-  const newPage = () => {
-    page = doc.addPage([W, Hh]);
-    y = Hh - M;
-  };
-  const text = (str, o) => {
-    o = o || {};
-    const size = o.size || 10,
-      f = o.f || font,
-      color = o.color || dark,
-      indent = o.indent || 0;
-    const segs = san(str).split("\n");
-    for (const seg of segs) {
-      for (const ln of wrap(seg, f, size)) {
-        if (y - (size + 3) < M + 24) newPage();
-        page.drawText(ln, {
-          x: M + indent,
-          y: y - size,
-          size: size,
-          font: f,
-          color: color
-        });
-        y -= size + 4;
-      }
-    }
-    y -= o.gap || 0;
-  };
-  const art = t => {
-    if (y - 20 < M + 24) newPage();
-    page.drawText(san(t), {
-      x: M,
-      y: y - 12,
-      size: 10.5,
-      font: bold,
-      color: slate
-    });
-    y -= 18;
-  };
-  newPage();
-  page.drawText("CONTRAT D'ENTRETIEN", {
-    x: M,
-    y: y - 16,
-    size: 16,
-    font: bold,
-    color: slate
-  });
-  page.drawText("Maintenance climatisation / pompe à chaleur", {
-    x: M,
-    y: y - 30,
-    size: 9.5,
-    font: font,
-    color: grey
-  });
-  if (logoImg) page.drawImage(logoImg, {
-    x: W - M - lw,
-    y: y - Math.max(lh, 14),
-    width: lw,
-    height: lh
-  });
-  y -= Math.max(46, lh + 6);
-  const ref = "N° " + (c.ref || "") + "     Le " + fmt(c.date);
-  page.drawText(ref, {
-    x: M,
-    y: y - 11,
-    size: 9.5,
-    font: bold,
-    color: sky
-  });
-  y -= 24;
-  const bw = (maxW - 12) / 2,
-    boxTop = y;
-  const entLines = ["ETS DUPIN", "79 Avenue Champ Rollet", "33610 Cestas", "N° attestation 198504"];
-  const cliLines = [site && site.nom || c.clientNom || "Client"].concat(site && site.adresse ? [site.adresse] : []);
-  if (site && (site.contact || site.telephone)) cliLines.push([site.contact, site.telephone].filter(Boolean).join(" - "));
-  const bh = Math.max(entLines.length, cliLines.length) * 12 + 26;
-  page.drawRectangle({
-    x: M,
-    y: boxTop - bh,
-    width: bw,
-    height: bh,
-    color: cardbg,
-    borderColor: light,
-    borderWidth: 1
-  });
-  page.drawText("LE PRESTATAIRE", {
-    x: M + 8,
-    y: boxTop - 14,
-    size: 8,
-    font: bold,
-    color: sky
-  });
-  let ey = boxTop - 27;
-  entLines.forEach((l, i) => {
-    page.drawText(san(l), {
-      x: M + 8,
-      y: ey,
-      size: i === 0 ? 10 : 8.5,
-      font: i === 0 ? bold : font,
-      color: i === 0 ? dark : grey
-    });
-    ey -= 12;
-  });
-  const cx = M + bw + 12;
-  page.drawRectangle({
-    x: cx,
-    y: boxTop - bh,
-    width: bw,
-    height: bh,
-    color: cardbg,
-    borderColor: light,
-    borderWidth: 1
-  });
-  page.drawText("LE CLIENT", {
-    x: cx + 8,
-    y: boxTop - 14,
-    size: 8,
-    font: bold,
-    color: sky
-  });
-  let cyy = boxTop - 27;
-  cliLines.forEach((l, i) => {
-    page.drawText(san(l), {
-      x: cx + 8,
-      y: cyy,
-      size: i === 0 ? 10 : 8.5,
-      font: i === 0 ? bold : font,
-      color: i === 0 ? dark : grey
-    });
-    cyy -= 12;
-  });
-  y = boxTop - bh - 18;
+  let logoImg = null, lw = 0, lh = 0;
+  if (logo) { try { const b = dataUrlToBytes(logo); logoImg = logo.indexOf("image/png") >= 0 ? await doc.embedPng(b) : await doc.embedJpg(b); const s = Math.min(38 / logoImg.height, 130 / logoImg.width, 1); lw = logoImg.width * s; lh = logoImg.height * s; } catch (e) { logoImg = null; } }
+  const page = doc.addPage([W, Hh]); let y = Hh - M;
+  const wrap = (t, f, size, w) => { const words = san(t).split(/\s+/); const lines = []; let cur = ""; for (const ww of words) { const tt = cur ? cur + " " + ww : ww; if (f.widthOfTextAtSize(tt, size) > (w || maxW) && cur) { lines.push(cur); cur = ww; } else cur = tt; } if (cur) lines.push(cur); return lines.length ? lines : [""]; };
+  const text = (str, o) => { o = o || {}; const size = o.size || 8, f = o.f || font, color = o.color || dark, indent = o.indent || 0; const segs = san(str).split("\n"); for (const seg of segs) { for (const ln of wrap(seg, f, size, maxW - indent)) { page.drawText(ln, { x: M + indent, y: y - size, size: size, font: f, color: color }); y -= size + 2.5; } } y -= o.gap || 0; };
+  const art = t => { y -= 2; for (const ln of wrap(t, bold, 9, maxW)) { page.drawText(san(ln), { x: M, y: y - 9, size: 9, font: bold, color: slate }); y -= 12; } };
+  page.drawText("CONTRAT D'ENTRETIEN", { x: M, y: y - 15, size: 15, font: bold, color: slate });
+  page.drawText("Maintenance climatisation / pompe à chaleur", { x: M, y: y - 27, size: 8, font: font, color: grey });
+  if (logoImg) page.drawImage(logoImg, { x: W - M - lw, y: y - Math.max(lh, 12), width: lw, height: lh });
+  y -= Math.max(36, lh + 4);
+  page.drawText("N° " + (c.ref || "") + "     Le " + fmt(c.date), { x: M, y: y - 9, size: 8.5, font: bold, color: sky }); y -= 16;
+  const bw = (maxW - 10) / 2, boxTop = y;
+  const entLines = ["ETS DUPIN", "79 Avenue Champ Rollet - 33610 Cestas", "N° attestation 198504"];
+  const cliLines = [(site && site.nom) || "Client"].concat(site && site.adresse ? [site.adresse] : []); if (site && (site.contact || site.telephone)) cliLines.push([site.contact, site.telephone].filter(Boolean).join(" - "));
+  const bh = Math.max(entLines.length, cliLines.length) * 10.5 + 22;
+  page.drawRectangle({ x: M, y: boxTop - bh, width: bw, height: bh, color: cardbg, borderColor: light, borderWidth: 1 });
+  page.drawText("LE PRESTATAIRE", { x: M + 6, y: boxTop - 12, size: 7, font: bold, color: sky });
+  let ey = boxTop - 23; entLines.forEach((l, i) => { page.drawText(san(l), { x: M + 6, y: ey, size: i === 0 ? 9 : 7.5, font: i === 0 ? bold : font, color: i === 0 ? dark : grey }); ey -= 10.5; });
+  const cx = M + bw + 10;
+  page.drawRectangle({ x: cx, y: boxTop - bh, width: bw, height: bh, color: cardbg, borderColor: light, borderWidth: 1 });
+  page.drawText("LE CLIENT", { x: cx + 6, y: boxTop - 12, size: 7, font: bold, color: sky });
+  let cyy = boxTop - 23; cliLines.forEach((l, i) => { page.drawText(san(l), { x: cx + 6, y: cyy, size: i === 0 ? 9 : 7.5, font: i === 0 ? bold : font, color: i === 0 ? dark : grey }); cyy -= 10.5; });
+  y = boxTop - bh - 8;
   let an = 1;
-  art("Article " + an++ + " - Objet du contrat");
-  text("Le prestataire assure l'entretien périodique des équipements de climatisation suivants :", {
-    size: 9.5,
-    gap: 2
-  });
+  const gwpOf = code => { const g = REFRIGERANTS.find(x => x.code === code); return g ? g.prp : (typeof GWP !== "undefined" && GWP[code]) || 0; };
+  const freqOf = t => t < 5 ? "non obligatoire (< 5 t.eq.CO2)" : t < 50 ? "tous les 12 mois (24 mois avec détection de fuite)" : t < 500 ? "tous les 6 mois (12 mois avec détection)" : "tous les 3 mois (6 mois avec détection)";
+  art("Article " + (an++) + " - Objet et échéances légales de contrôle (F-Gas)");
   (eqs || []).forEach(e => {
-    text("- " + [e.designation, e.marque, e.modele].filter(Boolean).join(" ") + (e.numeroSerie ? " (N° " + e.numeroSerie + ")" : "") + (e.fluide ? " - " + e.fluide : "") + (e.localisation ? " - " + e.localisation : ""), {
-      size: 9,
-      indent: 6
-    });
+    const _ch = parseFloat(String(e.chargeFluide || "").replace(",", ".")) || 0;
+    const _prp = gwpOf(e.fluide);
+    const _t = _ch && _prp ? Math.round(_ch * _prp / 10) / 100 : 0;
+    text("- " + [e.designation, e.marque, e.modele].filter(Boolean).join(" ") + (e.numeroSerie ? " (N° " + e.numeroSerie + ")" : "") + (e.fluide ? " - " + e.fluide : "") + (e.chargeFluide ? " " + e.chargeFluide + " kg" : "") + (e.localisation ? " - " + e.localisation : ""), { size: 7.5, indent: 6 });
+    if (_t > 0) text("-> " + _t + " t.eq.CO2 - controle d'etancheite : " + freqOf(_t), { size: 6.8, indent: 14, color: sky });
   });
-  if (!eqs || !eqs.length) text("- (aucun équipement sélectionné)", {
-    size: 9,
-    indent: 6,
-    color: grey
-  });
-  y -= 6;
-  const te = c.typesEntretien || {};
-  const teKeys = Object.keys(TYPES_ENTRETIEN).filter(k => te[k] === true);
+  if (!eqs || !eqs.length) text("- (aucun équipement sélectionné)", { size: 7.5, indent: 6, color: grey });
+  const te = c.typesEntretien || {}; const teKeys = Object.keys(TYPES_ENTRETIEN).filter(k => te[k] === true);
   if (teKeys.length) {
-    art("Article " + an++ + " - Nature des prestations d'entretien");
-    teKeys.forEach(k => {
-      text(k + " :", {
-        size: 9.5,
-        f: bold,
-        gap: 1
-      });
-      TYPES_ENTRETIEN[k].forEach(op => text("- " + op, {
-        size: 8.5,
-        indent: 8,
-        color: grey
-      }));
-      y -= 3;
-    });
-    y -= 2;
+    art("Article " + (an++) + " - Nature des prestations");
+    teKeys.forEach(k => text(k + " : " + TYPES_ENTRETIEN[k].join(", ") + ".", { size: 7, indent: 6, color: grey }));
   }
-  art("Article " + an++ + " - Fréquence des visites");
-  text(c.frequence || "1 visite d'entretien par an", {
-    size: 9.5,
-    gap: 6
-  });
-  art("Article " + an++ + " - Durée");
-  text(c.duree || "1 an, renouvelable par tacite reconduction.", {
-    size: 9.5,
-    gap: 6
-  });
+  art("Article " + (an++) + " - Fréquence : " + (c.frequence || "1 visite d'entretien par an"));
+  art("Article " + (an++) + " - Durée : " + (c.duree || "1 an, renouvelable par tacite reconduction."));
   const _ht = parseFloat(String(c.montantHT || "").replace(",", "."));
   if (!isNaN(_ht) || c.montant) {
-    art("Article " + an++ + " - Montant et facturation");
-    if (!isNaN(_ht)) {
-      const _r = isNaN(parseFloat(String(c.tva || "").replace(",", "."))) ? 20 : parseFloat(String(c.tva || "").replace(",", "."));
-      const _tva = _ht * _r / 100,
-        _ttc = _ht + _tva;
-      text("Montant HT : " + _ht.toFixed(2).replace(".", ",") + " EUR", {
-        size: 9.5
-      });
-      text("TVA " + _r + "% : " + _tva.toFixed(2).replace(".", ",") + " EUR", {
-        size: 9.5
-      });
-      text("Montant TTC : " + _ttc.toFixed(2).replace(".", ",") + " EUR", {
-        size: 10.5,
-        f: bold,
-        gap: 4
-      });
-    } else if (c.montant) {
-      text(c.montant, {
-        size: 9.5,
-        gap: 4
-      });
-    }
-    text("À l'issue de chaque intervention réalisée au titre du présent contrat, une facture sera établie correspondant au montant du contrat accepté par le client.", {
-      size: 9,
-      color: grey,
-      gap: 6
-    });
+    if (!isNaN(_ht)) { const _r = isNaN(parseFloat(String(c.tva || "").replace(",", "."))) ? 20 : parseFloat(String(c.tva || "").replace(",", ".")); const _ttc = _ht * (1 + _r / 100); art("Article " + (an++) + " - Montant : " + _ht.toFixed(2).replace(".", ",") + " EUR HT + TVA " + _r + "% = " + _ttc.toFixed(2).replace(".", ",") + " EUR TTC"); }
+    else art("Article " + (an++) + " - Montant : " + c.montant);
+    text("Une facture sera établie après chaque intervention réalisée au titre du présent contrat, correspondant au montant accepté par le client.", { size: 7, indent: 6, color: grey, gap: 1 });
   }
-  art("Article " + an++ + " - Conditions");
-  text(c.conditions || CONTRAT_CONDITIONS, {
-    size: 9,
-    gap: 6
-  });
-  if (c.observations) {
-    art("Observations");
-    text(c.observations, {
-      size: 9,
-      gap: 6
-    });
-  }
-  if (y - 96 < M + 24) newPage();
-  y -= 8;
-  const sbw = (maxW - 16) / 2,
-    sTop = y,
-    sh = 62,
-    sBot = sTop - 14 - sh,
-    sx2 = M + sbw + 16;
-  page.drawText("Le prestataire (ETS DUPIN)", {
-    x: M,
-    y: sTop - 2,
-    size: 9,
-    font: bold,
-    color: slate
-  });
-  page.drawText("Le client", {
-    x: sx2,
-    y: sTop - 2,
-    size: 9,
-    font: bold,
-    color: slate
-  });
-  page.drawRectangle({
-    x: M,
-    y: sBot,
-    width: sbw,
-    height: sh,
-    borderColor: light,
-    borderWidth: 1
-  });
-  page.drawRectangle({
-    x: sx2,
-    y: sBot,
-    width: sbw,
-    height: sh,
-    borderColor: light,
-    borderWidth: 1
-  });
-  page.drawText("Fait à Cestas, le ...... / ...... / ......", {
-    x: M + 8,
-    y: sBot + sh - 14,
-    size: 7.5,
-    font: font,
-    color: grey
-  });
-  page.drawText("Signature précédée de « lu et approuvé »", {
-    x: sx2 + 8,
-    y: sBot + sh - 14,
-    size: 7.5,
-    font: font,
-    color: grey
-  });
-  const pages = doc.getPages();
-  const total = pages.length;
-  pages.forEach((pg, i) => {
-    pg.drawLine({
-      start: {
-        x: M,
-        y: M + 16
-      },
-      end: {
-        x: W - M,
-        y: M + 16
-      },
-      thickness: 0.6,
-      color: light
-    });
-    pg.drawText("Contrat d'entretien " + (c.ref || "") + " - ETS DUPIN", {
-      x: M,
-      y: M + 5,
-      size: 7,
-      font: font,
-      color: grey
-    });
-    const pn = "Page " + (i + 1) + " / " + total;
-    pg.drawText(pn, {
-      x: W - M - font.widthOfTextAtSize(pn, 7),
-      y: M + 5,
-      size: 7,
-      font: font,
-      color: grey
-    });
-  });
+  art("Article " + (an++) + " - Conditions");
+  text(c.conditions || CONTRAT_CONDITIONS, { size: 7, color: grey, gap: 1 });
+  if (c.observations) { art("Observations"); text(c.observations, { size: 7, color: grey }); }
+  y -= 6;
+  const sbw = (maxW - 12) / 2, sTop = y, sh = 52, sBot = sTop - 12 - sh, sx2 = M + sbw + 12;
+  page.drawText("Le prestataire (ETS DUPIN)", { x: M, y: sTop - 2, size: 8, font: bold, color: slate });
+  page.drawText("Le client", { x: sx2, y: sTop - 2, size: 8, font: bold, color: slate });
+  page.drawRectangle({ x: M, y: sBot, width: sbw, height: sh, borderColor: light, borderWidth: 1 });
+  page.drawRectangle({ x: sx2, y: sBot, width: sbw, height: sh, borderColor: light, borderWidth: 1 });
+  page.drawText("Fait à Cestas, le ...... / ...... / ......", { x: M + 6, y: sBot + sh - 12, size: 7, font: font, color: grey });
+  page.drawText("Signature précédée de « lu et approuvé »", { x: sx2 + 6, y: sBot + sh - 12, size: 7, font: font, color: grey });
+  page.drawText("Contrat d'entretien " + (c.ref || "") + " - ETS DUPIN - 79 Avenue Champ Rollet, 33610 Cestas", { x: M, y: 22, size: 6.5, font: font, color: grey });
   return await doc.save();
 }
 function ContratForm({
@@ -6233,6 +5951,73 @@ function ContratsView({
     onSave: save,
     onClose: () => setEdit(null)
   }));
+}
+/* ===================== Calculateur t.CO2 & contrôle ===================== */
+function leakObligation(t) {
+  if (!(t > 0)) return {
+    txt: "",
+    cls: ""
+  };
+  if (t < 5) return {
+    txt: "Pas de contrôle d'étanchéité obligatoire (charge < 5 t.éq.CO2).",
+    cls: "ok"
+  };
+  if (t < 50) return {
+    txt: "Contrôle d'étanchéité obligatoire tous les 12 mois (24 mois avec système de détection de fuite).",
+    cls: "warn"
+  };
+  if (t < 500) return {
+    txt: "Contrôle d'étanchéité obligatoire tous les 6 mois (12 mois avec système de détection de fuite).",
+    cls: "warn"
+  };
+  return {
+    txt: "Contrôle d'étanchéité obligatoire tous les 3 mois (6 mois avec système de détection de fuite).",
+    cls: "warn"
+  };
+}
+function CalcCO2() {
+  const [gaz, setGaz] = useState("R32");
+  const [kg, setKg] = useState("");
+  const g = REFRIGERANTS.find(x => x.code === gaz) || REFRIGERANTS[0];
+  const charge = parseFloat(String(kg).replace(",", ".")) || 0;
+  const t = charge && g ? Math.round(charge * g.prp / 10) / 100 : 0;
+  const ob = leakObligation(t);
+  return /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-2xl border border-slate-200 p-4 mb-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "font-semibold text-sm mb-1"
+  }, "Calcul t.éq.CO₂ & contrôle d'étanchéité"), /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-slate-500 mb-3"
+  }, "Convertit une charge de fluide en tonnes équivalent CO₂ et indique l'obligation de contrôle périodique (F‑Gas)."), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-2 gap-2"
+  }, /*#__PURE__*/React.createElement("select", {
+    className: inputCls,
+    value: gaz,
+    onChange: e => setGaz(e.target.value)
+  }, REFRIGERANTS.map(x => /*#__PURE__*/React.createElement("option", {
+    key: x.code,
+    value: x.code
+  }, x.code, " (PRP ", x.prp, ")"))), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-1"
+  }, /*#__PURE__*/React.createElement("input", {
+    inputMode: "decimal",
+    className: inputCls,
+    value: kg,
+    onChange: e => setKg(e.target.value),
+    placeholder: "Charge"
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "text-sm text-slate-400"
+  }, "kg"))), charge > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "mt-3 space-y-2"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-sm"
+  }, "Équivalent : ", /*#__PURE__*/React.createElement("b", {
+    className: "text-slate-900"
+  }, t, " t.éq.CO₂"), " ", /*#__PURE__*/React.createElement("span", {
+    className: "text-slate-400"
+  }, "(charge ", charge, " kg × PRP ", g.prp, ")")), /*#__PURE__*/React.createElement("div", {
+    className: "text-sm rounded-xl px-3 py-2 " + (t < 5 ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800")
+  }, ob.txt)));
 }
 function App() {
   const [db, setDb] = useState(null);
@@ -7482,4 +7267,3 @@ function Root() {
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(Root, null));</script>
 </body>
 </html>
-
